@@ -7,15 +7,21 @@
 #define MAX_FILES 100
 #define MAX_LINE 1024
 #define MAX_CMD 512
-#define NUM_RUNS 5
+#define NUM_RUNS 1
 #define MAX_TOKENS 64
-#define TIME_LIMIT 100
+#define TIME_LIMIT 1
+#define NUM_INSTANCES 70
 
 // Structure to hold key-value pairs parsed from the summary line.
 typedef struct {
     char key[64];
     char value[128];
 } KeyValue;
+
+typedef struct {
+    char name[50];
+    int k_value;
+} Instance;
 
 // List of header keys in the desired order.
 // Note: "time_confirm_chroma" is not included because the output file header expects "time_confirm_crit".
@@ -32,61 +38,28 @@ const char *header_keys[] = {
 };
 const int num_header_keys = sizeof(header_keys) / sizeof(header_keys[0]);
 
-// A static array mapping each file (by order) to its k value.
-// Adjust these values as needed.
-int k_values[MAX_FILES] = {
-    4,  
-    5,  
-    6,
-    5,
-    6,
-    7,
-    5,
-    6,
-    7,
-    4,
-    5,
-    6,
-    7,
-    8,
-    4,
-    5,
-    6,
-    7,
-    8,
-    7,
-    4,
-    5,
-    8,
-    9,
-    4,
-    4,
-    4,
-    99,
-    107,
-    5,
-    17,
-    44,
-    6,
-    26,
-    72,
-    9,
-    43,
-    123,
-    9,
-    73,
-    216,
-    6,
-    80,
-    90,
-    8,
-    7,
-    9,
-    10,
-    11,
-    96,
-    7,
-};
+Instance instances[NUM_INSTANCES] = {
+        {"1-Insertions_4.col", 5}, {"2-Insertions_3.col", 4}, {"2-Insertions_4.col", 5},
+        {"3-Insertions_3.col", 4}, {"3-Insertions_4.col", 5}, {"4-Insertions_3.col", 4},
+        {"mug100_1.col", 4}, {"mug100_25.col", 4}, {"mug88_1.col", 4}, {"mug88_25.col", 4},
+        {"myciel2.col", 3}, {"myciel3.col", 4}, {"myciel4.col", 5}, {"myciel5.col", 6},
+        {"myciel6.col", 7}, {"queen10_10.col", 11}, {"DSJC125.5.col", 14}, {"DSJC250.5.col", 14},
+        {"DSJR500.1.col", 6}, {"DSJR500.1c.col", 80}, {"DSJR500.5.col", 90},
+        {"1-FullIns_3.col", 4}, {"1-FullIns_4.col", 5}, {"1-FullIns_5.col", 6},
+        {"2-FullIns_3.col", 5}, {"2-FullIns_4.col", 6}, {"2-FullIns_5.col", 7},
+        {"3-FullIns_3.col", 6}, {"3-FullIns_4.col", 7}, {"3-FullIns_5.col", 8},
+        {"4-FullIns_3.col", 7}, {"4-FullIns_4.col", 8}, {"4-FullIns_5.col", 7},
+        {"5-FullIns_3.col", 8}, {"5-FullIns_4.col", 9}, {"1-Insertions_5.col", 6},
+        {"1-Insertions_6.col", 7}, {"2-Insertions_5.col", 6}, {"3-Insertions_5.col", 6},
+        {"4-Insertions_4.col", 5}, {"ash331GPIA.col", 4}, {"ash608GPIA.col", 4},
+        {"ash958GPIA.col", 4}, {"flat1000_50_0.col", 50}, {"flat1000_60_0.col", 60},
+        {"flat1000_76_0.col", 76}, {"flat300_20_0.col", 20}, {"flat300_26_0.col", 26},
+        {"flat300_28_0.col", 28}, {"myciel7.col", 8}, {"queen6_6.col", 7}, {"queen8_8.col", 9},
+        {"queen9_9.col", 10}, {"r1000.1c.col", 96}, {"DSJC125.1.col", 5}, {"DSJC125.9.col", 44},
+        {"DSJC250.1.col", 6}, {"DSJC250.9.col", 72}, {"DSJC500.1.col", 9}, {"DSJC500.5.col", 43}, 
+        {"DSJC500.9.col", 123}, {"DSJC1000.1.col", 9}, {"DSJC1000.5.col", 73}, {"DSJC1000.9.col", 216},
+        {"C2000.5.col", 99}, {"C4000.5.col", 107}, {"will199GPIA.col", 7}
+    };
 
 // Helper function to trim newline characters
 void trim_newline(char *str) {
@@ -173,9 +146,14 @@ int main(void) {
         // Construct full file path
         snprintf(filepath, sizeof(filepath), "%s%s", dir_path, ent->d_name);
 
-        // Get the k value for this file from the static array.
-        // If k_values is not set for this file, default to 0.
-        int k_value = (file_index < MAX_FILES) ? k_values[file_index] : 0;
+        // Find the corresponding k_value for this file
+        int k_value = 0; // Default if no match is found
+        for (int i = 0; i < NUM_INSTANCES; i++) {
+            if (strcmp(ent->d_name, instances[i].name) == 0) {
+                k_value = instances[i].k_value;
+                break;
+            }
+        }
 
         // Run the command NUM_RUNS times for each file.
         for (int run = 0; run < NUM_RUNS; run++) {
