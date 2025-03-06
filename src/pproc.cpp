@@ -58,6 +58,8 @@ void mark_trivially_critical(const vi& ss, const vi& color, vb& crit, int k) {
          accumulate(begin(crit), end(crit), 0));
   }
 }
+
+//DETTA ÄR DEN VI BORDE ÄNDRA PÅ FÖR ATT TESTA NYA SAKER MED WEIGHTS
 int choose_v_sun(const vi& ss, const vb& crit) {
   int b = -1, b_score = 0;
   reservoir_sampling rs;
