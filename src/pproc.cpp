@@ -23,6 +23,10 @@
 */
 #include "pproc.h"
 #include "color.h"
+#include <vector>
+#include <queue>
+#include <stack>
+#include <random>
 void mark_trivially_critical(const vi& ss, const vi& color, vb& crit, int k) {
   vi in_ss(n, -1);
   vi color_seen(k, -1);
@@ -57,6 +61,16 @@ void mark_trivially_critical(const vi& ss, const vi& color, vb& crit, int k) {
       pr("Marked {} new vertices as critical. Total: {}\n", num_crits_found,
          accumulate(begin(crit), end(crit), 0));
   }
+}
+
+int choose_v_random(const vi& ss, const vb& crit) {
+  for (int i = 0; i < (int)ss.size(); ++i) {
+    assert(inrange(ss[i], 0, n - 1));
+    if (not crit[ss[i]]) {
+      return i;
+    }
+  }
+  return -1;
 }
 
 //DETTA ÄR DEN VI BORDE ÄNDRA PÅ FÖR ATT TESTA NYA SAKER MED WEIGHTS
@@ -103,7 +117,7 @@ pair<bool, bool> reduce_subset_one_by_one(int k, vi& ss, bool chroma_k_bef, time
   bool chroma_k = chroma_k_bef;
   bool crit = true;
   while (not t.timed_out()) {
-    int i = choose_v_sun(ss, surely_crit);
+    int i = choose_v_random(ss, surely_crit);
     if (i == -1) break;
     int v = ss[i];
     assert(not surely_crit[v]);
