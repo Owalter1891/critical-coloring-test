@@ -16,7 +16,7 @@
 * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-* AUTHORS OR COPY lRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+* AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 * SOFTWARE.
@@ -165,6 +165,28 @@ template <typename T> struct hash<std::vector<T>> {
   }
 };
 }
+
+inline vii convertToEdgeList(const vvi& adjList, const vi& subgraph) {
+  unordered_set<int> subgraphSet(subgraph.begin(), subgraph.end());  // Set for O(1) lookups
+  vii edgeList;
+
+  // Iterate over each vertex in the subgraph
+  for (int i : subgraph) {
+    // Iterate over each neighbor of the vertex
+    for (int j : adjList[i]) {
+      // Only consider the edge if both vertices are in the subgraph
+      if (subgraphSet.count(j)) {
+        // To avoid duplicate edges, ensure the smaller index comes first
+        if (i < j) {
+          edgeList.push_back({i, j});
+        }
+      }
+    }
+  }
+
+  return edgeList;
+}
+
 #define USE_TIMED_BLOCKS 
 #ifdef NDEBUG
 #undef USE_TIMED_BLOCKS

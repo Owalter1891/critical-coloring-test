@@ -104,13 +104,14 @@ void update_set(vvt& v, vi& flip_freq, timer t) {
 // Choose vertex with smallest neighborhood weight W; see Section 3.4
 int choose_remove(const vvt& v) {
   // TIME_BLOCK("choose_remove");
+  //r Stores index of vertex, sr stores current smallest neighhbourhood weight
   int r = -1, sr = -1;
-  for (int i = 0; i < n; ++i)
-    if (v[i] == B) {
-      int si = 0;
-      for (int j : AL[i])
+  for (int i = 0; i < n; ++i) //iterate over all verticies
+    if (v[i] == B) { //only consider unknown verticies
+      int si = 0; //variable to store neighbourhood weight
+      for (int j : AL[i]) //iterate through adjacency list of vertex i
         si += (v[j] == A ? m : (v[j] == B ? 1 : 0));
-      if (r == -1 or sr > si) r = i, sr = si;
+      if (r == -1 or sr > si) r = i, sr = si; //change current smallest neighborhood
     }
   return r;
 }

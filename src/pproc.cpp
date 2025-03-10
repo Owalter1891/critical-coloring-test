@@ -27,6 +27,11 @@
 #include <queue>
 #include <stack>
 #include <random>
+#include "betweeness_approx/algorithm/dynamic_centrality_hay.hpp"
+#include "betweeness_approx/algorithm/dynamic_centrality_naive.hpp"
+#include "betweeness_approx/algorithm/dynamic_centrality_bms.hpp"
+using namespace betweenness_centrality;
+
 void mark_trivially_critical(const vi& ss, const vi& color, vb& crit, int k) {
   vi in_ss(n, -1);
   vi color_seen(k, -1);
@@ -73,6 +78,23 @@ int choose_v_random(const vi& ss, const vb& crit) {
   return -1;
 }
 
+int choose_v_betweeness_approx(const vi& ss, const vb& crit, const DynamicCentralityBase& dcb) {
+  int b = -1;
+  float b_centrality = 0; 
+  reservoir_sampling rs;
+  for (int i = 0; i < (int)ss.size(); ++i) {
+    assert(inrange(ss[i], 0, n - 1));
+    if (not crit[ss[i]]) {
+      float centrality = dcb.QueryCentrality(ss[i]);
+      if (b == -1 or centrality < b_centrality or (centrality == b_centrality and rs.consider())) {
+        if (centrality != b_centrality) rs.reset();
+        b = i, b_centrality = centrality;
+      }
+    }
+  }
+  return b;
+}
+
 //DETTA ÄR DEN VI BORDE ÄNDRA PÅ FÖR ATT TESTA NYA SAKER MED WEIGHTS
 int choose_v_sun(const vi& ss, const vb& crit) {
   int b = -1, b_score = 0;
@@ -101,6 +123,14 @@ int choose_lexi(const vi& ss, const vb& crit) {
 pair<bool, bool> reduce_subset_one_by_one(int k, vi& ss, bool chroma_k_bef, timer t) {
   vi color;
   vb surely_crit(n, false);
+  //THIS IS FOR BETWEENESS CENTRALITY
+  //DynamicCentralityBase *dcb = new DynamicCentralityHAY();
+  //dcb->PreCompute(convertToEdgeList(AL, ss), 1000); //Very slow I think, might need to imporove this bitch
+  /*cout << "NEW GRAPH" << endl;
+  cout << "SUBGRAPH SIZE: " << ss.size() << endl;
+  for(int j : ss){
+    cout << "Value for edge " << j << ": " << dcb->QueryCentrality(j) << endl;
+  }*/
   auto color_ok = [&]() {
     if (color.size() != ss.size()) return false;
     if ((int)surely_crit.size() != n) return false;
@@ -117,7 +147,7 @@ pair<bool, bool> reduce_subset_one_by_one(int k, vi& ss, bool chroma_k_bef, time
   bool chroma_k = chroma_k_bef;
   bool crit = true;
   while (not t.timed_out()) {
-    int i = choose_v_random(ss, surely_crit);
+    int i = choose_v_sun(ss, surely_crit);
     if (i == -1) break;
     int v = ss[i];
     assert(not surely_crit[v]);
@@ -139,6 +169,8 @@ pair<bool, bool> reduce_subset_one_by_one(int k, vi& ss, bool chroma_k_bef, time
       }
     } else {
       chroma_k = sure;
+      //THIS IS FOR BETWENEEESS CENTRALITY
+      //dcb->DeleteNode(ss[v]);
       if (verb >= 1)
         pr("Removed {} (chroma_k: {}), reduced ss size {}->{}\n", v, sure, ss.size() + 1,
            ss.size());

@@ -4,7 +4,7 @@ GENERATOR = generateimperfectgraph
 override CFLAGS +=-Wall -Wextra -Wfatal-errors -std=c++17 -MD -MP -O3 -fconcepts
 CPP = g++
 LIBS = -lpthread -lstdc++ -lboost_program_options -lboost_system -lboost_filesystem 
-SRC = $(filter-out $(GENERATOR).cpp, $(wildcard *.cpp btdsatur/*.cpp hybridea/*.cpp cliques/mntshao.cpp))
+SRC = $(filter-out $(GENERATOR).cpp, $(wildcard *.cpp btdsatur/*.cpp hybridea/*.cpp cliques/mntshao.cpp betweeness_approx/*.cpp betweeness_approx/algorithm/*.cpp))
 HEADERS = $(wildcard *.h *.inl)
 OBJS = $(SRC:.cpp=.o)
 
