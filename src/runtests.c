@@ -3,6 +3,8 @@
 #include <string.h>
 #include <dirent.h>
 #include <errno.h>
+#include <pthread.h>
+#include <semaphore.h>
 
 #define MAX_FILES 100
 #define MAX_LINE 1024
@@ -39,27 +41,27 @@ const char *header_keys[] = {
 const int num_header_keys = sizeof(header_keys) / sizeof(header_keys[0]);
 
 Instance instances[NUM_INSTANCES] = {
-        {"1-Insertions_4.col", 5}, {"2-Insertions_3.col", 4}, {"2-Insertions_4.col", 5},
-        {"3-Insertions_3.col", 4}, {"3-Insertions_4.col", 5}, {"4-Insertions_3.col", 4},
-        {"mug100_1.col", 4}, {"mug100_25.col", 4}, {"mug88_1.col", 4}, {"mug88_25.col", 4},
-        {"myciel2.col", 3}, {"myciel3.col", 4}, {"myciel4.col", 5}, {"myciel5.col", 6},
-        {"myciel6.col", 7}, {"queen10_10.col", 11}, {"DSJC125.5.col", 14}, {"DSJC250.5.col", 14},
-        {"DSJR500.1.col", 6}, {"DSJR500.1c.col", 80}, {"DSJR500.5.col", 90},
-        {"1-FullIns_3.col", 4}, {"1-FullIns_4.col", 5}, {"1-FullIns_5.col", 6},
-        {"2-FullIns_3.col", 5}, {"2-FullIns_4.col", 6}, {"2-FullIns_5.col", 7},
-        {"3-FullIns_3.col", 6}, {"3-FullIns_4.col", 7}, {"3-FullIns_5.col", 8},
-        {"4-FullIns_3.col", 7}, {"4-FullIns_4.col", 8}, {"4-FullIns_5.col", 7},
-        {"5-FullIns_3.col", 8}, {"5-FullIns_4.col", 9}, {"1-Insertions_5.col", 6},
-        {"1-Insertions_6.col", 7}, {"2-Insertions_5.col", 6}, {"3-Insertions_5.col", 6},
-        {"4-Insertions_4.col", 5}, {"ash331GPIA.col", 4}, {"ash608GPIA.col", 4},
-        {"ash958GPIA.col", 4}, {"flat1000_50_0.col", 50}, {"flat1000_60_0.col", 60},
-        {"flat1000_76_0.col", 76}, {"flat300_20_0.col", 20}, {"flat300_26_0.col", 26},
-        {"flat300_28_0.col", 28}, {"myciel7.col", 8}, {"queen6_6.col", 7}, {"queen8_8.col", 9},
-        {"queen9_9.col", 10}, {"r1000.1c.col", 96}, {"DSJC125.1.col", 5}, {"DSJC125.9.col", 44},
-        {"DSJC250.1.col", 6}, {"DSJC250.9.col", 72}, {"DSJC500.1.col", 9}, {"DSJC500.5.col", 43}, 
-        {"DSJC500.9.col", 123}, {"DSJC1000.1.col", 9}, {"DSJC1000.5.col", 73}, {"DSJC1000.9.col", 216},
-        {"C2000.5.col", 99}, {"C4000.5.col", 107}, {"will199GPIA.col", 7}
-    };
+    {"1-Insertions_4.col", 5}, {"2-Insertions_3.col", 4}, {"2-Insertions_4.col", 5},
+    {"3-Insertions_3.col", 4}, {"3-Insertions_4.col", 5}, {"4-Insertions_3.col", 4},
+    {"mug100_1.col", 4}, {"mug100_25.col", 4}, {"mug88_1.col", 4}, {"mug88_25.col", 4},
+    {"myciel2.col", 3}, {"myciel3.col", 4}, {"myciel4.col", 5}, {"myciel5.col", 6},
+    {"myciel6.col", 7}, {"queen10_10.col", 11}, {"DSJC125.5.col", 14}, {"DSJC250.5.col", 14},
+    {"DSJR500.1.col", 6}, {"DSJR500.1c.col", 80}, {"DSJR500.5.col", 90},
+    {"1-FullIns_3.col", 4}, {"1-FullIns_4.col", 5}, {"1-FullIns_5.col", 6},
+    {"2-FullIns_3.col", 5}, {"2-FullIns_4.col", 6}, {"2-FullIns_5.col", 7},
+    {"3-FullIns_3.col", 6}, {"3-FullIns_4.col", 7}, {"3-FullIns_5.col", 8},
+    {"4-FullIns_3.col", 7}, {"4-FullIns_4.col", 8}, {"4-FullIns_5.col", 7},
+    {"5-FullIns_3.col", 8}, {"5-FullIns_4.col", 9}, {"1-Insertions_5.col", 6},
+    {"1-Insertions_6.col", 7}, {"2-Insertions_5.col", 6}, {"3-Insertions_5.col", 6},
+    {"4-Insertions_4.col", 5}, {"ash331GPIA.col", 4}, {"ash608GPIA.col", 4},
+    {"ash958GPIA.col", 4}, {"flat1000_50_0.col", 50}, {"flat1000_60_0.col", 60},
+    {"flat1000_76_0.col", 76}, {"flat300_20_0.col", 20}, {"flat300_26_0.col", 26},
+    {"flat300_28_0.col", 28}, {"myciel7.col", 8}, {"queen6_6.col", 7}, {"queen8_8.col", 9},
+    {"queen9_9.col", 10}, {"r1000.1c.col", 96}, {"DSJC125.1.col", 5}, {"DSJC125.9.col", 44},
+    {"DSJC250.1.col", 6}, {"DSJC250.9.col", 72}, {"DSJC500.1.col", 9}, {"DSJC500.5.col", 43}, 
+    {"DSJC500.9.col", 123}, {"DSJC1000.1.col", 9}, {"DSJC1000.5.col", 73}, {"DSJC1000.9.col", 216},
+    {"C2000.5.col", 99}, {"C4000.5.col", 107}, {"will199GPIA.col", 7}
+};
 
 // Helper function to trim newline characters
 void trim_newline(char *str) {
@@ -69,20 +71,27 @@ void trim_newline(char *str) {
     }
 }
 
+// Retrieve a value from tokens[] given a key; returns pointer to value if found, else "NA"
+const char *get_token_value(const char *key, KeyValue tokens[], int num_tokens) {
+    for (int i = 0; i < num_tokens; i++) {
+        if (strcmp(tokens[i].key, key) == 0) {
+            return tokens[i].value;
+        }
+    }
+    return "NA";
+}
+
 // Parse a summary line (a string of space-separated tokens like key=value)
 // and fill tokens[] with the extracted key-value pairs.
 // Returns the number of tokens parsed.
 int parse_summary_line(const char *line, KeyValue tokens[], int max_tokens) {
     int count = 0;
-    // Make a copy of line to tokenize
     char buffer[MAX_LINE];
     strncpy(buffer, line, MAX_LINE-1);
     buffer[MAX_LINE-1] = '\0';
 
-    // Tokenize by spaces
     char *token = strtok(buffer, " ");
     while (token != NULL && count < max_tokens) {
-        // Look for an '=' in the token
         char *eq = strchr(token, '=');
         if (eq != NULL) {
             size_t key_len = eq - token;
@@ -97,37 +106,244 @@ int parse_summary_line(const char *line, KeyValue tokens[], int max_tokens) {
     return count;
 }
 
-// Retrieve a value from tokens[] given a key; returns pointer to value if found, else "NA"
-const char *get_token_value(const char *key, KeyValue tokens[], int num_tokens) {
-    for (int i = 0; i < num_tokens; i++) {
-        if (strcmp(tokens[i].key, key) == 0) {
-            return tokens[i].value;
+// Define a structure for passing thread arguments.
+typedef struct {
+    int run_index;
+    const char *instance_name;
+    int k_value;
+    int run_duration;
+    char *result; // Buffer to store the output line.
+} ThreadArg;
+
+    // Semaphore to limit the number of concurrent threads to 10.
+sem_t sem;
+
+// Thread function.
+void *thread_func(void *arg) {
+    ThreadArg *targ = (ThreadArg *) arg;
+    char cmd[MAX_CMD];
+    snprintf(cmd, sizeof(cmd), "./critcol -i ../data/%s -k %d -t %d 2>&1",
+             targ->instance_name, targ->k_value, targ->run_duration);
+    FILE *pipe = popen(cmd, "r");
+    if (!pipe) {
+        fprintf(stderr, "Error executing command: %s\n", cmd);
+        strcpy(targ->result, "NA");
+    } else {
+        char output_line[MAX_LINE];
+        // Skip the first line.
+        fgets(output_line, sizeof(output_line), pipe);
+        if (fgets(output_line, sizeof(output_line), pipe) != NULL) {
+            trim_newline(output_line);
+            strncpy(targ->result, output_line, MAX_LINE-1);
+            targ->result[MAX_LINE-1] = '\0';
+        } else {
+            fprintf(stderr, "No output from command: %s\n", cmd);
+            strcpy(targ->result, "NA");
         }
+        pclose(pipe);
     }
-    return "NA";
+    sem_post(&sem); // Signal that this thread has finished.
+    return NULL;
 }
 
-int main(void) {
+void run_instance_multiple_times_parallel(const char *instance_name, int num_runs, int run_duration) {
+    int k_value = 0;
+    for (int i = 0; i < NUM_INSTANCES; i++) {
+        if (strcmp(instance_name, instances[i].name) == 0) {
+            k_value = instances[i].k_value;
+            break;
+        }
+    }
+
+    // Allocate an array to store each run's result.
+    char **results = malloc(num_runs * sizeof(char *));
+    for (int i = 0; i < num_runs; i++) {
+        results[i] = malloc(MAX_LINE);
+        results[i][0] = '\0';
+    }
+
+    ThreadArg *thread_args = malloc(num_runs * sizeof(ThreadArg));
+    pthread_t *threads = malloc(num_runs * sizeof(pthread_t));
+
+    sem_init(&sem, 0, 10);
+
+    // Create threads, waiting on the semaphore to allow up to 10 concurrent threads.
+    for (int i = 0; i < num_runs; i++) {
+        sem_wait(&sem); // Ensure no more than 10 threads are running concurrently.
+        thread_args[i].run_index = i;
+        thread_args[i].instance_name = instance_name;
+        thread_args[i].k_value = k_value;
+        thread_args[i].run_duration = run_duration;
+        thread_args[i].result = results[i];
+        if (pthread_create(&threads[i], NULL, thread_func, &thread_args[i]) != 0) {
+            fprintf(stderr, "Error creating thread for run %d\n", i);
+            strcpy(results[i], "NA");
+            sem_post(&sem);
+        }
+    }
+
+    // Wait for all threads to complete.
+    for (int i = 0; i < num_runs; i++) {
+        pthread_join(threads[i], NULL);
+    }
+
+    sem_destroy(&sem);
+    free(thread_args);
+    free(threads);
+
+    // Write the results (and compute averages) to file.
+    FILE *out_fp = fopen("testResults.dat", "w");
+    if (!out_fp) {
+        perror("Error opening testResults.dat for writing");
+        for (int i = 0; i < num_runs; i++) {
+            free(results[i]);
+        }
+        free(results);
+        return;
+    }
+
+    // Write header line.
+    for (int i = 0; i < num_header_keys; i++) {
+        fprintf(out_fp, "%-20s", header_keys[i]);
+    }
+    fprintf(out_fp, "\n");
+
+    double sums[num_header_keys];  // For averaging.
+    int valid_counts[num_header_keys]; // Numeric counts per column.
+    memset(sums, 0, sizeof(sums));
+    memset(valid_counts, 0, sizeof(valid_counts));
+
+    // Process each run's result.
+    for (int i = 0; i < num_runs; i++) {
+        KeyValue tokens[MAX_TOKENS];
+        int num_tokens = parse_summary_line(results[i], tokens, MAX_TOKENS);
+        for (int j = 0; j < num_header_keys; j++) {
+            const char *val = get_token_value(header_keys[j], tokens, num_tokens);
+            if (strcmp(val, "NA") == 0) {
+                fprintf(out_fp, "%-20s", "NA");
+            } else {
+                fprintf(out_fp, "%-20s", val);
+                char *endptr;
+                double num = strtod(val, &endptr);
+                if (endptr != val) {
+                    sums[j] += num;
+                    valid_counts[j]++;
+                }
+            }
+        }
+        fprintf(out_fp, "\n");
+    }
+
+    // Append the averages as the final row.
+    fprintf(out_fp, "%-20s", "AVG");
+    for (int i = 1; i < num_header_keys; i++) { // Skip "instance" column.
+        if (valid_counts[i] > 0) {
+            fprintf(out_fp, "%-20.2f", sums[i] / valid_counts[i]);
+        } else {
+            fprintf(out_fp, "%-20s", "NA");
+        }
+    }
+    fprintf(out_fp, "\n");
+
+    fclose(out_fp);
+
+    // Clean up allocated memory.
+    for (int i = 0; i < num_runs; i++) {
+        free(results[i]);
+    }
+    free(results);
+}
+
+void run_instance_multiple_times(const char *instance_name, int num_runs, int run_duration) {
+    int k_value = 0;
+    for (int i = 0; i < NUM_INSTANCES; i++) {
+        if (strcmp(instance_name, instances[i].name) == 0) {
+            k_value = instances[i].k_value;
+            break;
+        }
+    }
+
+    FILE *out_fp = fopen("testResults.dat", "w");
+    if (!out_fp) {
+        perror("Error opening testResults.dat for writing");
+        return;
+    }
+
+    for (int i = 0; i < num_header_keys; i++) {
+        fprintf(out_fp, "%-20s", header_keys[i]);
+    }
+    fprintf(out_fp, "\n");
+
+    double sums[num_header_keys];
+    int valid_counts[num_header_keys];
+    memset(sums, 0, sizeof(sums));
+    memset(valid_counts, 0, sizeof(valid_counts));
+
+    for (int run = 0; run < num_runs; run++) {
+        char cmd[MAX_CMD];
+        snprintf(cmd, sizeof(cmd), "./critcol -i ../data/%s -k %d -t %d 2>&1", instance_name, k_value, run_duration);
+        FILE *pipe = popen(cmd, "r");
+        if (!pipe) {
+            fprintf(stderr, "Error executing command: %s\n", cmd);
+            continue;
+        }
+        char output_line[MAX_LINE];
+        fgets(output_line, sizeof(output_line), pipe); // Skip first line
+        if (fgets(output_line, sizeof(output_line), pipe) != NULL) {
+            trim_newline(output_line);
+            KeyValue tokens[MAX_TOKENS];
+            int num_tokens = parse_summary_line(output_line, tokens, MAX_TOKENS);
+            for (int i = 0; i < num_header_keys; i++) {
+                const char *val = get_token_value(header_keys[i], tokens, num_tokens);
+                if (strcmp(val, "NA") == 0) {
+                    fprintf(out_fp, "%-20s", "NA");
+                } else {
+                    fprintf(out_fp, "%-20s", val);
+                    char *endptr;
+                    double num = strtod(val, &endptr);
+                    if (endptr != val) {
+                        sums[i] += num;
+                        valid_counts[i]++;
+                    }
+                }
+            }
+            fprintf(out_fp, "\n");
+        } else {
+            fprintf(stderr, "No output from command: %s\n", cmd);
+        }
+        pclose(pipe);
+    }
+
+    fprintf(out_fp, "%-20s", "AVG");
+    for (int i = 1; i < num_header_keys; i++) {
+        if (valid_counts[i] > 0) {
+            fprintf(out_fp, "%-20.2f", sums[i] / valid_counts[i]);
+        } else {
+            fprintf(out_fp, "%-20s", "NA");
+        }
+    }
+    fprintf(out_fp, "\n");
+    fclose(out_fp);
+}
+
+int run_all_instances(void) {
     DIR *dir;
     struct dirent *ent;
     int file_index = 0;
     const char *dir_path = "../data/";
     char filepath[MAX_CMD];
 
-    // Open the output .dat file for writing results
     FILE *out_fp = fopen("results.dat", "w");
     if (!out_fp) {
         perror("Error opening results.dat for writing");
         return EXIT_FAILURE;
     }
 
-    // Write header line to the output file
     for (int i = 0; i < num_header_keys; i++) {
-        fprintf(out_fp, "%-20s", header_keys[i]); // Left-align headers with a fixed width
+        fprintf(out_fp, "%-20s", header_keys[i]);
     }
     fprintf(out_fp, "\n");
 
-    // Open the directory containing data files.
     dir = opendir(dir_path);
     if (dir == NULL) {
         perror("Unable to open directory");
@@ -135,19 +351,15 @@ int main(void) {
         return EXIT_FAILURE;
     }
 
-    // Iterate over each file in the directory.
     while ((ent = readdir(dir)) != NULL) {
-        // Skip non-regular files and hidden entries (like . and ..)
         if (ent->d_type != DT_REG)
             continue;
         if (ent->d_name[0] == '.')
             continue;
 
-        // Construct full file path
         snprintf(filepath, sizeof(filepath), "%s%s", dir_path, ent->d_name);
 
-        // Find the corresponding k_value for this file
-        int k_value = 0; // Default if no match is found
+        int k_value = 0;
         for (int i = 0; i < NUM_INSTANCES; i++) {
             if (strcmp(ent->d_name, instances[i].name) == 0) {
                 k_value = instances[i].k_value;
@@ -155,41 +367,28 @@ int main(void) {
             }
         }
 
-        // Run the command NUM_RUNS times for each file.
         for (int run = 0; run < NUM_RUNS; run++) {
             char cmd[MAX_CMD];
-            // Build the command string.
-            // Example: "./critcol -i ../data/FILE_NAME -k K_VALUE -t 1800"
-           snprintf(cmd, sizeof(cmd), "./critcol -i %s -k %d -t %d 2>&1", filepath, k_value, TIME_LIMIT);
-
-            // Use popen to run the command and capture its output.
+            snprintf(cmd, sizeof(cmd), "./critcol -i %s -k %d -t %d 2>&1", filepath, k_value, TIME_LIMIT);
             FILE *pipe = popen(cmd, "r");
             if (!pipe) {
                 fprintf(stderr, "Error executing command: %s\n", cmd);
                 continue;
             }
-
-            // Read one line of output (the summary line)
             char output_line[MAX_LINE];
-
-            //Skip first line
-            fgets(output_line, sizeof(output_line), pipe);
+            fgets(output_line, sizeof(output_line), pipe); // Skip first line
             if (fgets(output_line, sizeof(output_line), pipe) != NULL) {
                 printf("Testing %s attempt no %d \n", filepath, (run+1));
                 fflush(stdout);
                 trim_newline(output_line);
-
-                // Parse the output line into key-value tokens.
                 KeyValue tokens[MAX_TOKENS];
                 int num_tokens = parse_summary_line(output_line, tokens, MAX_TOKENS);
-
-                // For each header key, print the corresponding value (or NA if not found).
                 for (int i = 0; i < num_header_keys; i++) {
                     const char *val = get_token_value(header_keys[i], tokens, num_tokens);
                     if (strcmp(val, "NA") == 0) {
-                        fprintf(out_fp, "%-20s", "NA");  // Ensure NA values are aligned
+                        fprintf(out_fp, "%-20s", "NA");
                     } else {
-                        fprintf(out_fp, "%-20s", val);   // Use fixed width for alignment
+                        fprintf(out_fp, "%-20s", val);
                     }
                 }
                 fprintf(out_fp, "\n");
@@ -202,7 +401,10 @@ int main(void) {
     }
     closedir(dir);
     fclose(out_fp);
-
     printf("Results written to results.dat\n");
     return EXIT_SUCCESS;
+}
+
+void main(void){
+    run_instance_multiple_times_parallel("5-FullIns_4.col", 10, 1000);
 }

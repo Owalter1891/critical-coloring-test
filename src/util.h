@@ -176,9 +176,10 @@ inline vii convertToEdgeList(const vvi& adjList, const vi& subgraph) {
     for (int j : adjList[i]) {
       // Only consider the edge if both vertices are in the subgraph
       if (subgraphSet.count(j)) {
-        // To avoid duplicate edges, ensure the smaller index comes first
-        if (i < j) {
+        //Add edges both ways to make it like an unweighted graph
+        if(i < j){
           edgeList.push_back({i, j});
+          edgeList.push_back({j, i});
         }
       }
     }
