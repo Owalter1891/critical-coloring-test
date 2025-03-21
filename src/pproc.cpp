@@ -125,7 +125,7 @@ pair<bool, bool> reduce_subset_one_by_one(int k, vi& ss, bool chroma_k_bef, time
   vb surely_crit(n, false);
   //THIS IS FOR BETWEENESS CENTRALITY
   //DynamicCentralityBase *dcb = new DynamicCentralityHAY();
-  //dcb->PreCompute(convertToEdgeList(AL, ss), 1000); //Very slow I think, might need to imporove this bitch
+  //dcb->PreCompute(convertToEdgeList(AL, ss), ss.size()); //Very slow I think, might need to imporove this bitch
   /*cout << "NEW GRAPH" << endl;
   cout << "SUBGRAPH SIZE: " << ss.size() << endl;
   for(int j : ss){

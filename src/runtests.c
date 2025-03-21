@@ -9,9 +9,9 @@
 #define MAX_FILES 100
 #define MAX_LINE 1024
 #define MAX_CMD 512
-#define NUM_RUNS 1
+#define NUM_RUNS 8
 #define MAX_TOKENS 64
-#define TIME_LIMIT 1
+#define TIME_LIMIT 1800
 #define NUM_INSTANCES 70
 
 // Structure to hold key-value pairs parsed from the summary line.
@@ -254,47 +254,179 @@ void run_instance_multiple_times_parallel(const char *instance_name, int num_run
     free(results);
 }
 
-void run_instance_multiple_times(const char *instance_name, int num_runs, int run_duration) {
-    int k_value = 0;
-    for (int i = 0; i < NUM_INSTANCES; i++) {
-        if (strcmp(instance_name, instances[i].name) == 0) {
-            k_value = instances[i].k_value;
-            break;
+typedef struct {
+    int instance_index;
+    int run_index;
+    char filename[256];    // Name of the instance file (e.g. "myciel3.col")
+    int k_value;
+    int run_duration;
+    char *result;          // Buffer to store the output line.
+} AllInstanceThreadArg;
+
+sem_t sem;  // Global semaphore to limit concurrency to 10 threads.
+
+void *thread_func_all(void *arg) {
+    AllInstanceThreadArg *targ = (AllInstanceThreadArg *) arg;
+    char filepath[512];
+    // Construct full file path.
+    snprintf(filepath, sizeof(filepath), "../data/%s", targ->filename);
+    char cmd[MAX_CMD];
+    snprintf(cmd, sizeof(cmd), "./critcol -i %s -k %d -t %d 2>&1",
+             filepath, targ->k_value, targ->run_duration);
+    FILE *pipe = popen(cmd, "r");
+    if (!pipe) {
+        fprintf(stderr, "Error executing command: %s\n", cmd);
+        strcpy(targ->result, "NA");
+    } else {
+        char output_line[MAX_LINE];
+        // Skip the first line.
+        fgets(output_line, sizeof(output_line), pipe);
+        if (fgets(output_line, sizeof(output_line), pipe) != NULL) {
+            trim_newline(output_line);
+            strncpy(targ->result, output_line, MAX_LINE-1);
+            targ->result[MAX_LINE-1] = '\0';
+        } else {
+            fprintf(stderr, "No output from command: %s\n", cmd);
+            strcpy(targ->result, "NA");
+        }
+        pclose(pipe);
+    }
+    sem_post(&sem); // Signal completion.
+    return NULL;
+}
+
+// --- Modified run_all_instances function with parallelisation ---
+// This function reads all instance files from ../data/,
+// then for each instance runs NUM_RUNS runs in parallel (max 10 threads concurrently),
+// and finally writes each instance’s run results followed by an average row to results.dat.
+int run_all_instances(void) {
+    const char *dir_path = "../data/";
+    DIR *dir = opendir(dir_path);
+    if (!dir) {
+        perror("Unable to open directory");
+        return EXIT_FAILURE;
+    }
+
+    // First, count valid files.
+    int file_count = 0;
+    struct dirent *ent;
+    while ((ent = readdir(dir)) != NULL) {
+        if (ent->d_type != DT_REG)
+            continue;
+        if (ent->d_name[0] == '.')
+            continue;
+        file_count++;
+    }
+
+    // Allocate arrays to store file names and corresponding k_values.
+    char **file_names = malloc(file_count * sizeof(char *));
+    int *k_values = malloc(file_count * sizeof(int));
+    rewinddir(dir);
+    int idx = 0;
+    while ((ent = readdir(dir)) != NULL) {
+        if (ent->d_type != DT_REG)
+            continue;
+        if (ent->d_name[0] == '.')
+            continue;
+        file_names[idx] = strdup(ent->d_name);
+        // Look up k_value from the instances array.
+        int k_val = 0;
+        for (int i = 0; i < NUM_INSTANCES; i++) {
+            if (strcmp(ent->d_name, instances[i].name) == 0) {
+                k_val = instances[i].k_value;
+                break;
+            }
+        }
+        k_values[idx] = k_val;
+        idx++;
+    }
+    closedir(dir);
+
+    // Allocate a 2D array to store results for each instance and each run.
+    // results[i][j] will store the output for file_names[i] run j.
+    char ***results = malloc(file_count * sizeof(char **));
+    for (int i = 0; i < file_count; i++) {
+        results[i] = malloc(NUM_RUNS * sizeof(char *));
+        for (int j = 0; j < NUM_RUNS; j++) {
+            results[i][j] = malloc(MAX_LINE);
+            results[i][j][0] = '\0';
         }
     }
 
-    FILE *out_fp = fopen("testResults.dat", "w");
-    if (!out_fp) {
-        perror("Error opening testResults.dat for writing");
-        return;
+    int total_tasks = file_count * NUM_RUNS;
+    AllInstanceThreadArg *thread_args = malloc(total_tasks * sizeof(AllInstanceThreadArg));
+    pthread_t *threads = malloc(total_tasks * sizeof(pthread_t));
+
+    sem_init(&sem, 0, 10);  // Allow up to 10 threads concurrently.
+
+    // Launch threads for each run of each instance.
+    int task_index = 0;
+    for (int i = 0; i < file_count; i++) {
+        for (int j = 0; j < NUM_RUNS; j++) {
+            thread_args[task_index].instance_index = i;
+            thread_args[task_index].run_index = j;
+            strncpy(thread_args[task_index].filename, file_names[i],
+                    sizeof(thread_args[task_index].filename) - 1);
+            thread_args[task_index].filename[sizeof(thread_args[task_index].filename)-1] = '\0';
+            thread_args[task_index].k_value = k_values[i];
+            thread_args[task_index].run_duration = TIME_LIMIT;
+            thread_args[task_index].result = results[i][j];
+            sem_wait(&sem); // Wait if already 10 threads running.
+            if (pthread_create(&threads[task_index], NULL, thread_func_all,
+                               &thread_args[task_index]) != 0) {
+                fprintf(stderr, "Error creating thread for file %s run %d\n",
+                        file_names[i], j);
+                strcpy(results[i][j], "NA");
+                sem_post(&sem);
+            }
+            task_index++;
+        }
     }
 
+    // Wait for all threads to complete.
+    for (int t = 0; t < total_tasks; t++) {
+        pthread_join(threads[t], NULL);
+    }
+    sem_destroy(&sem);
+
+    // Open output file.
+    FILE *out_fp = fopen("results.dat", "w");
+    if (!out_fp) {
+        perror("Error opening results.dat for writing");
+        // Clean up before returning.
+        for (int i = 0; i < file_count; i++) {
+            for (int j = 0; j < NUM_RUNS; j++) {
+                free(results[i][j]);
+            }
+            free(results[i]);
+            free(file_names[i]);
+        }
+        free(results);
+        free(file_names);
+        free(k_values);
+        free(thread_args);
+        free(threads);
+        return EXIT_FAILURE;
+    }
+
+    // Write header line.
     for (int i = 0; i < num_header_keys; i++) {
         fprintf(out_fp, "%-20s", header_keys[i]);
     }
     fprintf(out_fp, "\n");
 
-    double sums[num_header_keys];
-    int valid_counts[num_header_keys];
-    memset(sums, 0, sizeof(sums));
-    memset(valid_counts, 0, sizeof(valid_counts));
+    // Process each instance: write all runs then an average row.
+    for (int i = 0; i < file_count; i++) {
+        double sums[num_header_keys];
+        int valid_counts[num_header_keys];
+        memset(sums, 0, sizeof(sums));
+        memset(valid_counts, 0, sizeof(valid_counts));
 
-    for (int run = 0; run < num_runs; run++) {
-        char cmd[MAX_CMD];
-        snprintf(cmd, sizeof(cmd), "./critcol -i ../data/%s -k %d -t %d 2>&1", instance_name, k_value, run_duration);
-        FILE *pipe = popen(cmd, "r");
-        if (!pipe) {
-            fprintf(stderr, "Error executing command: %s\n", cmd);
-            continue;
-        }
-        char output_line[MAX_LINE];
-        fgets(output_line, sizeof(output_line), pipe); // Skip first line
-        if (fgets(output_line, sizeof(output_line), pipe) != NULL) {
-            trim_newline(output_line);
+        for (int j = 0; j < NUM_RUNS; j++) {
             KeyValue tokens[MAX_TOKENS];
-            int num_tokens = parse_summary_line(output_line, tokens, MAX_TOKENS);
-            for (int i = 0; i < num_header_keys; i++) {
-                const char *val = get_token_value(header_keys[i], tokens, num_tokens);
+            int num_tokens = parse_summary_line(results[i][j], tokens, MAX_TOKENS);
+            for (int col = 0; col < num_header_keys; col++) {
+                const char *val = get_token_value(header_keys[col], tokens, num_tokens);
                 if (strcmp(val, "NA") == 0) {
                     fprintf(out_fp, "%-20s", "NA");
                 } else {
@@ -302,109 +434,43 @@ void run_instance_multiple_times(const char *instance_name, int num_runs, int ru
                     char *endptr;
                     double num = strtod(val, &endptr);
                     if (endptr != val) {
-                        sums[i] += num;
-                        valid_counts[i]++;
+                        sums[col] += num;
+                        valid_counts[col]++;
                     }
                 }
             }
             fprintf(out_fp, "\n");
-        } else {
-            fprintf(stderr, "No output from command: %s\n", cmd);
         }
-        pclose(pipe);
-    }
-
-    fprintf(out_fp, "%-20s", "AVG");
-    for (int i = 1; i < num_header_keys; i++) {
-        if (valid_counts[i] > 0) {
-            fprintf(out_fp, "%-20.2f", sums[i] / valid_counts[i]);
-        } else {
-            fprintf(out_fp, "%-20s", "NA");
+        // Write average row for this instance.
+        fprintf(out_fp, "%-20s", "AVG");
+        for (int col = 1; col < num_header_keys; col++) { // Skip the "instance" column.
+            if (valid_counts[col] > 0)
+                fprintf(out_fp, "%-20.2f", sums[col] / valid_counts[col]);
+            else
+                fprintf(out_fp, "%-20s", "NA");
         }
+        fprintf(out_fp, "\n");
     }
-    fprintf(out_fp, "\n");
-    fclose(out_fp);
-}
-
-int run_all_instances(void) {
-    DIR *dir;
-    struct dirent *ent;
-    int file_index = 0;
-    const char *dir_path = "../data/";
-    char filepath[MAX_CMD];
-
-    FILE *out_fp = fopen("results.dat", "w");
-    if (!out_fp) {
-        perror("Error opening results.dat for writing");
-        return EXIT_FAILURE;
-    }
-
-    for (int i = 0; i < num_header_keys; i++) {
-        fprintf(out_fp, "%-20s", header_keys[i]);
-    }
-    fprintf(out_fp, "\n");
-
-    dir = opendir(dir_path);
-    if (dir == NULL) {
-        perror("Unable to open directory");
-        fclose(out_fp);
-        return EXIT_FAILURE;
-    }
-
-    while ((ent = readdir(dir)) != NULL) {
-        if (ent->d_type != DT_REG)
-            continue;
-        if (ent->d_name[0] == '.')
-            continue;
-
-        snprintf(filepath, sizeof(filepath), "%s%s", dir_path, ent->d_name);
-
-        int k_value = 0;
-        for (int i = 0; i < NUM_INSTANCES; i++) {
-            if (strcmp(ent->d_name, instances[i].name) == 0) {
-                k_value = instances[i].k_value;
-                break;
-            }
-        }
-
-        for (int run = 0; run < NUM_RUNS; run++) {
-            char cmd[MAX_CMD];
-            snprintf(cmd, sizeof(cmd), "./critcol -i %s -k %d -t %d 2>&1", filepath, k_value, TIME_LIMIT);
-            FILE *pipe = popen(cmd, "r");
-            if (!pipe) {
-                fprintf(stderr, "Error executing command: %s\n", cmd);
-                continue;
-            }
-            char output_line[MAX_LINE];
-            fgets(output_line, sizeof(output_line), pipe); // Skip first line
-            if (fgets(output_line, sizeof(output_line), pipe) != NULL) {
-                printf("Testing %s attempt no %d \n", filepath, (run+1));
-                fflush(stdout);
-                trim_newline(output_line);
-                KeyValue tokens[MAX_TOKENS];
-                int num_tokens = parse_summary_line(output_line, tokens, MAX_TOKENS);
-                for (int i = 0; i < num_header_keys; i++) {
-                    const char *val = get_token_value(header_keys[i], tokens, num_tokens);
-                    if (strcmp(val, "NA") == 0) {
-                        fprintf(out_fp, "%-20s", "NA");
-                    } else {
-                        fprintf(out_fp, "%-20s", val);
-                    }
-                }
-                fprintf(out_fp, "\n");
-            } else {
-                fprintf(stderr, "No output from command: %s\n", cmd);
-            }
-            pclose(pipe);
-        }
-        file_index++;
-    }
-    closedir(dir);
     fclose(out_fp);
     printf("Results written to results.dat\n");
+
+    // Clean up allocated memory.
+    for (int i = 0; i < file_count; i++) {
+        for (int j = 0; j < NUM_RUNS; j++) {
+            free(results[i][j]);
+        }
+        free(results[i]);
+        free(file_names[i]);
+    }
+    free(results);
+    free(file_names);
+    free(k_values);
+    free(thread_args);
+    free(threads);
+
     return EXIT_SUCCESS;
 }
 
 void main(void){
-    run_instance_multiple_times_parallel("5-FullIns_4.col", 10, 1000);
+    run_all_instances();
 }
